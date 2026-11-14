@@ -1,39 +1,109 @@
-// Settings "Folder order": adjacent swap keeps the flat pre-order sequence; hidden JSON rides the core's save POST.
+// Folders page arrows: ↑/↓ swaps a row (subtree travels with it) against its orderable neighbor, autosaves the pre-order list via AJAX. No form, no Save button.
 (function () {
     'use strict';
 
-    function updateHidden() {
-        var rows = document.querySelectorAll('#rcfo-list .rcfo-row');
-        var ids = [];
-        rows.forEach(function (r) { ids.push(r.getAttribute('data-folder')); });
-        var hidden = document.getElementById('_folder_order');
-        if (hidden) hidden.value = JSON.stringify(ids);
+    var LIST = '#subscription-table';
+    var busy = false;
+
+    function css() {
+        if (document.getElementById('rcfo-style')) return;
+        var s = document.createElement('style');
+        s.id = 'rcfo-style';
+        // Elastic pins .custom-switch at right:0; arrows take the edge slot, checkbox shifts left. shortcut: pixel-tuned for Elastic, revisit if another skin is used.
+        s.textContent = '#subscription-table li.mailbox{position:relative}'
+            + '#subscription-table li.mailbox > .custom-switch{right:3.4rem}'
+            + '#subscription-table li.mailbox > .rcfo-arrows{position:absolute;top:0;right:.25rem;display:flex;align-items:center;height:100%;gap:.15rem}'
+            + '#subscription-table .rcfo-arrows button{border:0;background:transparent;color:inherit;cursor:pointer;font-size:.9rem;line-height:1;padding:.35rem .3rem}'
+            + '#subscription-table .rcfo-arrows button[disabled]{opacity:.25;cursor:default}';
+        document.head.appendChild(s);
     }
 
-    function swap(row, dir) {
-        var target = dir < 0 ? row.previousElementSibling : row.nextElementSibling;
-        if (!target) return;
-        row.parentNode.insertBefore(dir < 0 ? row : target, dir < 0 ? target : row);
-        updateHidden();
+    function orderable(li) {
+        return li && li.classList.contains('mailbox') && !li.classList.contains('root')
+            && !!li.querySelector(':scope > .custom-switch input');
+    }
+
+    function neighbor(li, dir) {
+        var ref = dir < 0 ? li.previousElementSibling : li.nextElementSibling;
+        return orderable(ref) ? ref : null;
+    }
+
+    function setBusy(on) {
+        busy = on;
+        document.querySelectorAll(LIST + ' .rcfo-arrows button').forEach(function (b) { b.disabled = on; });
+    }
+
+    function paint(li) {
+        var old = li.querySelector(':scope > .rcfo-arrows');
+        if (old) old.remove();
+
+        var up = neighbor(li, -1);
+        var down = neighbor(li, 1);
+
+        var span = document.createElement('span');
+        span.className = 'rcfo-arrows';
+        span.innerHTML = '<button type="button" class="rcfo-up"' + (up ? '' : ' disabled') + ' aria-label="Move up">↑</button>'
+            + '<button type="button" class="rcfo-down"' + (down ? '' : ' disabled') + ' aria-label="Move down">↓</button>';
+        if (busy) span.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+        li.appendChild(span);
+    }
+
+    function paintAll() {
+        if (!document.body.classList.contains('action-folders')) return;
+        css();
+        document.querySelectorAll(LIST + ' li.mailbox').forEach(function (li) {
+            if (orderable(li)) paint(li); else { var o = li.querySelector(':scope > .rcfo-arrows'); if (o) o.remove(); }
+        });
+    }
+
+    // Document order of the rows = pre-order; checkbox value carries the raw IMAP name (iconizer rule: never decode ids).
+    function collectOrder() {
+        var ids = [];
+        document.querySelectorAll(LIST + ' li.mailbox > .custom-switch input').forEach(function (cb) {
+            if (cb.value) ids.push(cb.value);
+        });
+        return ids;
+    }
+
+    function onArrow(btn) {
+        if (busy) return;
+        var li = btn.closest('li.mailbox');
+        var dir = btn.classList.contains('rcfo-up') ? -1 : 1;
+        var ref = neighbor(li, dir);
+        if (!li || !ref) return;
+
+        li.parentNode.insertBefore(dir < 0 ? li : ref, dir < 0 ? ref : li);
+        paintAll();
+
+        setBusy(true);
+        $.post(rcmail.url('folderorder-save'), { _order: JSON.stringify(collectOrder()), _token: rcmail.env.request_token })
+            .always(function () { setBusy(false); })
+            .fail(function () { location.reload(); }); // server truth wins over a desynced DOM
     }
 
     document.addEventListener('click', function (e) {
         var btn = e.target.closest ? e.target.closest('.rcfo-up, .rcfo-down') : null;
-        if (!btn) return;
-        swap(btn.closest('.rcfo-row'), btn.classList.contains('rcfo-up') ? -1 : 1);
+        if (btn && !btn.disabled) onArrow(btn);
     });
 
-    // After a successful save the iframe re-renders with the confirmation: reload only the ancestor frame that owns the sidebar — parent may be Nextcloud, not webmail.
-    if (document.querySelector('.message.success, .confirmation')) {
-        var w = window.parent;
-        try {
-            while (w && w !== top) {
-                if (w.document.querySelector('.folderlist')) break;
-                w = w.parent;
-            }
-            if (w && w.document.querySelector('.folderlist')) {
-                setTimeout(function () { w.location.reload(); }, 700);
-            }
-        } catch (err) { /* cross-origin ancestor: reload on next natural navigation */ }
+    // Search/filter rebuilds rows; the observer disconnects while we mutate so our edits never retrigger it (iconizer pattern).
+    var list = document.querySelector(LIST);
+    if (list && window.MutationObserver) {
+        var mo = new MutationObserver(function () {
+            mo.disconnect();
+            paintAll();
+            mo.observe(list, { childList: true, subtree: true });
+        });
+        mo.observe(list, { childList: true, subtree: true });
+    }
+
+    if (window.rcmail && rcmail.addEventListener) {
+        rcmail.addEventListener('responseafter', paintAll);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', paintAll);
+    } else {
+        paintAll();
     }
 })();

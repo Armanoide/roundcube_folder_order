@@ -3,9 +3,7 @@
 
 require_once __DIR__ . '/src/OrderSorter.php';
 require_once __DIR__ . '/src/OrderStore.php';
-require_once __DIR__ . '/src/OrderSettingsUI.php';
 
-use Armanoide\FolderOrder\OrderSettingsUI;
 use Armanoide\FolderOrder\OrderSorter;
 use Armanoide\FolderOrder\OrderStore;
 
@@ -26,10 +24,8 @@ class roundcube_folder_order extends rcube_plugin
         $this->add_hook('folders_list', [$this, 'sort_flat_list']);
 
         if (rcmail::get_instance()->task === 'settings') {
-            $ui = new OrderSettingsUI((string) @file_get_contents(__DIR__ . '/folderorder.js'));
-            $this->add_hook('preferences_sections_list', [$ui, 'sectionsList']);
-            $this->add_hook('preferences_list', [$ui, 'list']);
-            $this->add_hook('preferences_save', [$ui, 'save']);
+            // Autosave endpoint for the ↑/↓ arrows injected into the folders page (folderorder.js).
+            $this->register_action('folderorder-save', [$this, 'save_ajax']);
         }
     }
 
@@ -63,6 +59,28 @@ class roundcube_folder_order extends rcube_plugin
         }
 
         return $args;
+    }
+
+    /** Persist the posted pre-order list. Broken payload keeps the previous order — a tampered or truncated POST must never wipe the user's layout. */
+    public function save_ajax(): void
+    {
+        $rcmail = rcmail::get_instance();
+
+        if (!$rcmail->check_request_token(rcube_utils::INPUT_POST)) {
+            raise_error(['code' => 403, 'message' => 'invalidrequesttoken']);
+            return;
+        }
+
+        $order = OrderStore::sanitize_json(rcube_utils::get_input_string('_order', rcube_utils::INPUT_POST));
+
+        if ($order === null) {
+            $rcmail->output->command('textmessage', ['message' => 'Invalid order payload — nothing saved.', 'target' => 'messagestack']);
+            $rcmail->output->send();
+            return;
+        }
+
+        $rcmail->user->save_prefs([OrderStore::PREFS_KEY => $order]);
+        $rcmail->output->send();
     }
 
     /** Bind the store to the authenticated user (id exists post-login). */

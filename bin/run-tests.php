@@ -151,5 +151,18 @@ check('hydrate drops non-strings', $s->all() === ['INBOX', 'Work']);
 $s->hydrate('not-an-array');
 check('hydrate junk => empty', $s->isEmpty());
 
+echo "OrderStore::sanitize_json\n";
+
+// Autosave payload: clean pre-order list passes through untouched.
+check('sanitize keeps valid list', OrderStore::sanitize_json('["INBOX","PRO.Clients"]') === ['INBOX', 'PRO.Clients']);
+
+// Broken JSON must return null so the handler keeps the previous order — never a wipe.
+check('sanitize broken json => null', OrderStore::sanitize_json('{"not":"a list"}') === null);
+check('sanitize empty string => null', OrderStore::sanitize_json('') === null);
+check('sanitize empty list => null', OrderStore::sanitize_json('[]') === null);
+
+// Junk entries dropped, empty strings dropped, reindexed.
+check('sanitize drops junk', OrderStore::sanitize_json('["INBOX",42,"","Work"]') === ['INBOX', 'Work']);
+
 echo "\n{$pass} passed, {$fail} failed\n";
 exit($fail === 0 ? 0 : 1);
