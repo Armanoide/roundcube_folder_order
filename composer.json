@@ -1,0 +1,18 @@
+{
+  "name": "armanoide/roundcube-folder-order",
+  "type": "roundcube-plugin",
+  "description": "Manual folder ordering in the Roundcube Elastic sidebar — user-defined order via render_mailboxlist, persisted per user. Answers upstream issue #5003.",
+  "keywords": ["roundcube", "plugin", "folders", "order", "sort", "sidebar"],
+  "license": "MIT",
+  "authors": [{ "name": "Armanoide", "homepage": "https://github.com/Armanoide" }],
+  "require": {
+    "php": ">=8.1",
+    "roundcube/plugin-installer": ">=0.3.0"
+  },
+  "autoload": {
+    "psr-4": { "Armanoide\\FolderOrder\\": "src/" }
+  },
+  "scripts": {
+    "test": "php bin/run-tests.php"
+  }
+}
