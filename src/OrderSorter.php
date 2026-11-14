@@ -29,8 +29,8 @@ final class OrderSorter
         return $tree;
     }
 
-    /** Flat pre-order list (folders_list hook of the settings page): siblings bucketed by parent, DFS emit keeps children contiguous under their parent. */
-    public static function sort_flat(array $list, array $order, string $delim = '/'): array
+    /** Flat pre-order list (folders_list hook of the settings page): siblings bucketed by parent, DFS emit keeps children contiguous under their parent. Rows key the id under 'folder_imap' there, 'id' in my own settings list. */
+    public static function sort_flat(array $list, array $order, string $delim = '/', string $id_key = 'id'): array
     {
         if (empty($list) || $order === []) {
             return $list;
@@ -40,32 +40,46 @@ final class OrderSorter
 
         $buckets = [];
         foreach ($list as $folder) {
-            $id     = (string) ($folder['id'] ?? '');
+            $id     = (string) ($folder[$id_key] ?? '');
             // level 0 = top level even when the id carries delimiters — special folders are pinned flat by the core.
             $parent = (int) ($folder['level'] ?? 0) === 0 ? '' : self::parent_of($id, $delim);
             $buckets[$parent][] = $folder;
         }
 
         foreach ($buckets as &$siblings) {
-            usort($siblings, static function (array $a, array $b) use ($rank): int {
-                return self::compare((string) ($a['id'] ?? ''), (string) ($b['id'] ?? ''), $rank);
+            usort($siblings, static function (array $a, array $b) use ($rank, $id_key): int {
+                return self::compare((string) ($a[$id_key] ?? ''), (string) ($b[$id_key] ?? ''), $rank);
             });
         }
         unset($siblings);
 
         $out = [];
-        $emit = static function (string $parent) use (&$emit, &$buckets, &$out): void {
+        $seen = [];
+        $emit = static function (string $parent) use (&$emit, &$buckets, &$out, &$seen, $id_key): void {
             foreach ($buckets[$parent] ?? [] as $folder) {
+                $id = (string) ($folder[$id_key] ?? '');
+                // seen: a folder emits once, so no data shape can loop forever (the empty-id live 500 of 2026-11-14).
+                if ($id !== '' && isset($seen[$id])) {
+                    continue;
+                }
+                $seen[$id] = true;
                 $out[] = $folder;
-                $emit((string) ($folder['id'] ?? ''));
+                if ($id !== '' && $id !== $parent) {
+                    $emit($id);
+                }
             }
         };
         $emit('');
 
         // A bucket whose parent never rendered keeps its rows at the end — never swallow a folder.
         foreach ($buckets as $parent => $siblings) {
-            if ($parent !== '' && !self::is_ancestor_chain($parent, $list)) {
+            if ($parent !== '' && !self::is_ancestor_chain($parent, $list, $id_key)) {
                 foreach ($siblings as $folder) {
+                    $id = (string) ($folder[$id_key] ?? '');
+                    if ($id !== '' && isset($seen[$id])) {
+                        continue;
+                    }
+                    $seen[$id] = true;
                     $out[] = $folder;
                 }
             }
@@ -80,10 +94,10 @@ final class OrderSorter
     }
 
     /** @param list<array> $list */
-    private static function is_ancestor_chain(string $parent, array $list): bool
+    private static function is_ancestor_chain(string $parent, array $list, string $id_key = 'id'): bool
     {
         foreach ($list as $folder) {
-            if ((string) ($folder['id'] ?? '') === $parent) {
+            if ((string) ($folder[$id_key] ?? '') === $parent) {
                 return true;
             }
         }

@@ -114,6 +114,29 @@ check('flat: level-0 special buckets at top despite dotted id', flat_ids($flat) 
 $flat = OrderSorter::sort_flat([['id' => 'Ghost.X', 'level' => 1]], ['Ghost.X'], '.');
 check('flat: orphan rows survive', flat_ids($flat) === ['Ghost.X']);
 
+// Regression: the core folders_list hook keys rows by 'folder_imap', not 'id'. Reading the wrong key yields empty ids and infinite recursion (live 500, 2026-11-14).
+function core_flat_fixture(): array
+{
+    return [
+        ['folder_imap' => 'INBOX', 'level' => 0],
+        ['folder_imap' => 'Administration', 'level' => 0],
+        ['folder_imap' => 'Bankings', 'level' => 0],
+        ['folder_imap' => 'PRO.Clients', 'level' => 1],
+    ];
+}
+
+$flat = OrderSorter::sort_flat(core_flat_fixture(), ['Bankings', 'INBOX'], '.', 'folder_imap');
+check('flat: core folder_imap shape sorts, no recursion blowup', array_column($flat, 'folder_imap') === ['Bankings', 'INBOX', 'Administration', 'PRO.Clients']);
+
+// The live 500 case: folders_list rows have no 'id' key. Old code recursed emit('') forever; seen-tracking must terminate and keep every row once.
+$nokey = [
+    ['folder_imap' => 'INBOX', 'level' => 0],
+    ['folder_imap' => 'Drafts', 'level' => 0],
+    ['folder_imap' => 'PRO.Clients', 'level' => 1],
+];
+$flat = OrderSorter::sort_flat($nokey, ['Drafts'], '.', 'folder_imap');
+check('flat: no-id-key rows terminate, all preserved', count($flat) === 3 && array_column($flat, 'folder_imap') === ['Drafts', 'INBOX', 'PRO.Clients']);
+
 echo "OrderStore\n";
 
 $s = new OrderStore();

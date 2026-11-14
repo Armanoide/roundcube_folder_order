@@ -58,7 +58,8 @@ class roundcube_folder_order extends rcube_plugin
 
         $rcmail = rcmail::get_instance();
         if (isset($args['list']) && is_array($args['list'])) {
-            $args['list'] = OrderSorter::sort_flat($args['list'], $this->store->all(), $rcmail->get_storage()->get_hierarchy_delimiter());
+            // Core rows key the raw name under 'folder_imap' — reading 'id' here caused the live 500 (empty ids, infinite recursion).
+            $args['list'] = OrderSorter::sort_flat($args['list'], $this->store->all(), $rcmail->get_storage()->get_hierarchy_delimiter(), 'folder_imap');
         }
 
         return $args;
