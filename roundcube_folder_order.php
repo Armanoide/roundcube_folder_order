@@ -3,7 +3,9 @@
 
 require_once __DIR__ . '/src/OrderSorter.php';
 require_once __DIR__ . '/src/OrderStore.php';
+require_once __DIR__ . '/src/OrderSettingsUI.php';
 
+use Armanoide\FolderOrder\OrderSettingsUI;
 use Armanoide\FolderOrder\OrderSorter;
 use Armanoide\FolderOrder\OrderStore;
 
@@ -20,6 +22,15 @@ class roundcube_folder_order extends rcube_plugin
     public function init(): void
     {
         $this->add_hook('render_mailboxlist', [$this, 'sort_tree']);
+        // The settings folders page builds its own flat list — same order, flat variant.
+        $this->add_hook('folders_list', [$this, 'sort_flat_list']);
+
+        if (rcmail::get_instance()->task === 'settings') {
+            $ui = new OrderSettingsUI((string) @file_get_contents(__DIR__ . '/folderorder.js'));
+            $this->add_hook('preferences_sections_list', [$ui, 'sectionsList']);
+            $this->add_hook('preferences_list', [$ui, 'list']);
+            $this->add_hook('preferences_save', [$ui, 'save']);
+        }
     }
 
     public function sort_tree($args)
@@ -32,6 +43,22 @@ class roundcube_folder_order extends rcube_plugin
 
         if (isset($args['list']) && is_array($args['list'])) {
             $args['list'] = OrderSorter::sort($args['list'], $this->store->all());
+        }
+
+        return $args;
+    }
+
+    public function sort_flat_list($args)
+    {
+        $this->bind_store();
+
+        if ($this->store->isEmpty()) {
+            return $args;
+        }
+
+        $rcmail = rcmail::get_instance();
+        if (isset($args['list']) && is_array($args['list'])) {
+            $args['list'] = OrderSorter::sort_flat($args['list'], $this->store->all(), $rcmail->get_storage()->get_hierarchy_delimiter());
         }
 
         return $args;

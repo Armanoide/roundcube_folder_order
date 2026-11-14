@@ -75,6 +75,45 @@ check('associative keys preserved', array_keys($sorted) === ['Work', 'Archive', 
 // Unknown id in the order list is simply ignored, never fatal.
 check('unknown ordered id ignored', ids(OrderSorter::sort(fixture(), ['Ghost'])) === ['Archive', 'Drafts', 'INBOX', 'Work']);
 
+echo "OrderSorter::sort_flat\n";
+
+/** Flat pre-order rows as the folders_list hook delivers them: id + level, special folders pinned at level 0. */
+function flat_fixture(): array
+{
+    return [
+        ['id' => 'INBOX', 'level' => 0],
+        ['id' => 'Administration', 'level' => 0],
+        ['id' => 'Bankings', 'level' => 0],
+        ['id' => 'PRO.Clients', 'level' => 1],
+        ['id' => 'PRO.Insurance', 'level' => 1],
+    ];
+}
+
+function flat_ids(array $rows): array
+{
+    return array_column($rows, 'id');
+}
+
+check('flat: empty order leaves list unchanged', flat_ids(OrderSorter::sort_flat(flat_fixture(), [])) === flat_ids(flat_fixture()));
+
+// Swap two top-level folders: children of the moved parent stay contiguous under it.
+$flat = OrderSorter::sort_flat(flat_fixture(), ['Bankings', 'INBOX'], '.');
+check('flat: ordered roots first by rank', array_slice(flat_ids($flat), 0, 2) === ['Bankings', 'INBOX']);
+check('flat: children stay under their parent', flat_ids($flat) === ['Bankings', 'INBOX', 'Administration', 'PRO.Clients', 'PRO.Insurance']);
+
+// Sibling reorder inside a parent.
+$flat = OrderSorter::sort_flat(flat_fixture(), ['PRO.Insurance'], '.');
+check('flat: siblings reorder under parent', array_slice(flat_ids($flat), -2) === ['PRO.Insurance', 'PRO.Clients']);
+
+// A special folder pinned at level 0 with a dotted id must bucket at top, not under INBOX.
+$special = [['id' => 'INBOX', 'level' => 0], ['id' => 'INBOX.Drafts', 'level' => 0]];
+$flat = OrderSorter::sort_flat($special, ['INBOX.Drafts'], '.');
+check('flat: level-0 special buckets at top despite dotted id', flat_ids($flat) === ['INBOX.Drafts', 'INBOX']);
+
+// Orphan bucket (parent absent from the list) never swallows rows.
+$flat = OrderSorter::sort_flat([['id' => 'Ghost.X', 'level' => 1]], ['Ghost.X'], '.');
+check('flat: orphan rows survive', flat_ids($flat) === ['Ghost.X']);
+
 echo "OrderStore\n";
 
 $s = new OrderStore();

@@ -29,6 +29,68 @@ final class OrderSorter
         return $tree;
     }
 
+    /** Flat pre-order list (folders_list hook of the settings page): siblings bucketed by parent, DFS emit keeps children contiguous under their parent. */
+    public static function sort_flat(array $list, array $order, string $delim = '/'): array
+    {
+        if (empty($list) || $order === []) {
+            return $list;
+        }
+
+        $rank = array_flip($order);
+
+        $buckets = [];
+        foreach ($list as $folder) {
+            $id     = (string) ($folder['id'] ?? '');
+            // level 0 = top level even when the id carries delimiters — special folders are pinned flat by the core.
+            $parent = (int) ($folder['level'] ?? 0) === 0 ? '' : self::parent_of($id, $delim);
+            $buckets[$parent][] = $folder;
+        }
+
+        foreach ($buckets as &$siblings) {
+            usort($siblings, static function (array $a, array $b) use ($rank): int {
+                return self::compare((string) ($a['id'] ?? ''), (string) ($b['id'] ?? ''), $rank);
+            });
+        }
+        unset($siblings);
+
+        $out = [];
+        $emit = static function (string $parent) use (&$emit, &$buckets, &$out): void {
+            foreach ($buckets[$parent] ?? [] as $folder) {
+                $out[] = $folder;
+                $emit((string) ($folder['id'] ?? ''));
+            }
+        };
+        $emit('');
+
+        // A bucket whose parent never rendered keeps its rows at the end — never swallow a folder.
+        foreach ($buckets as $parent => $siblings) {
+            if ($parent !== '' && !self::is_ancestor_chain($parent, $list)) {
+                foreach ($siblings as $folder) {
+                    $out[] = $folder;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    private static function parent_of(string $id, string $delim): string
+    {
+        return str_contains($id, $delim) ? substr($id, 0, strrpos($id, $delim)) : '';
+    }
+
+    /** @param list<array> $list */
+    private static function is_ancestor_chain(string $parent, array $list): bool
+    {
+        foreach ($list as $folder) {
+            if ((string) ($folder['id'] ?? '') === $parent) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** Ordered ids first by rank, unknown ones after them alphabetically — a new folder must never disappear. */
     private static function compare(string $a, string $b, array $rank): int
     {
