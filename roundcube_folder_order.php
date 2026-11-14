@@ -26,6 +26,12 @@ class roundcube_folder_order extends rcube_plugin
         if (rcmail::get_instance()->task === 'settings') {
             // Autosave endpoint for the ↑/↓ arrows injected into the folders page (folderorder.js).
             $this->register_action('folderorder-save', [$this, 'save_ajax']);
+
+            // Inline, not include_script (iconizer lesson): registered scripts vanished from re-rendered pages. The JS self-guards on body.action-folders.
+            $out = rcmail::get_instance()->output;
+            if ($out && $out->type === 'html' && method_exists($out, 'add_script')) {
+                $out->add_script((string) @file_get_contents(__DIR__ . '/folderorder.js'));
+            }
         }
     }
 

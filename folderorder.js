@@ -86,9 +86,10 @@
         if (btn && !btn.disabled) onArrow(btn);
     });
 
-    // Search/filter rebuilds rows; the observer disconnects while we mutate so our edits never retrigger it (iconizer pattern).
-    var list = document.querySelector(LIST);
-    if (list && window.MutationObserver) {
+    // Search/filter rebuilds rows; the observer disconnects while we mutate so our edits never retrigger it (iconizer pattern). Deferred to ready: add_script lands in head, where #subscription-table does not exist yet at parse time.
+    function armObserver() {
+        var list = document.querySelector(LIST);
+        if (!list || !window.MutationObserver) return;
         var mo = new MutationObserver(function () {
             mo.disconnect();
             paintAll();
@@ -102,8 +103,9 @@
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', paintAll);
+        document.addEventListener('DOMContentLoaded', function () { paintAll(); armObserver(); });
     } else {
         paintAll();
+        armObserver();
     }
 })();
