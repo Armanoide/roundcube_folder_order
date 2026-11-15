@@ -5,7 +5,7 @@
     var LIST = '#subscription-table';
     var busy = false;
 
-    function css() {
+    function inject_style() {
         if (document.getElementById('rcfo-style')) return;
         var s = document.createElement('style');
         s.id = 'rcfo-style';
@@ -18,19 +18,16 @@
         document.head.appendChild(s);
     }
 
+    // offsetParent null = row hidden by the search filter: swapping with an invisible neighbor would change prefs with zero feedback.
     function orderable(li) {
         return li && li.classList.contains('mailbox') && !li.classList.contains('root')
+            && li.offsetParent !== null
             && !!li.querySelector(':scope > .custom-switch input');
     }
 
     function neighbor(li, dir) {
         var ref = dir < 0 ? li.previousElementSibling : li.nextElementSibling;
         return orderable(ref) ? ref : null;
-    }
-
-    function setBusy(on) {
-        busy = on;
-        document.querySelectorAll(LIST + ' .rcfo-arrows button').forEach(function (b) { b.disabled = on; });
     }
 
     function paint(li) {
@@ -54,16 +51,16 @@
             e.preventDefault();
             e.stopPropagation();
             var b = e.target.closest('button');
-            if (b && !b.disabled) onArrow(b);
+            if (b && !b.disabled) move_row_and_save(b);
         });
         li.appendChild(span);
     }
 
     function paintAll() {
         if (!document.body.classList.contains('action-folders')) return;
-        css();
+        inject_style();
         document.querySelectorAll(LIST + ' li.mailbox').forEach(function (li) {
-            if (orderable(li)) paint(li); else { var o = li.querySelector(':scope > .rcfo-arrows'); if (o) o.remove(); }
+            if (orderable(li)) paint(li);
         });
     }
 
@@ -76,24 +73,24 @@
         return ids;
     }
 
-    function onArrow(btn) {
+    function move_row_and_save(btn) {
         if (busy) return;
         var li = btn.closest('li.mailbox');
         var dir = btn.classList.contains('rcfo-up') ? -1 : 1;
         var ref = neighbor(li, dir);
-        if (!li || !ref) return;
+        if (!ref) return;
 
         li.parentNode.insertBefore(dir < 0 ? li : ref, dir < 0 ? ref : li);
+        busy = true;
         paintAll();
 
-        setBusy(true);
         // Core forces a 'plugin.' prefix on every plugin-registered action (rcube_plugin_api::register_action) — posting to the bare name silently 404s into an empty envelope.
         $.post(rcmail.url('plugin.folderorder-save'), { _order: JSON.stringify(collectOrder()), _token: rcmail.env.request_token })
-            .always(function () { setBusy(false); })
+            .always(function () { busy = false; paintAll(); })
+            // Plain $.post never executes core commands: a textmessage in the envelope means reject or save-failure, so reload to server truth.
+            .done(function (r) { if (r && String(r).indexOf('textmessage') > -1) location.reload(); })
             .fail(function () { location.reload(); }); // server truth wins over a desynced DOM
     }
-
-    // (click handling is bound per-arrow-span in paint() — document delegation dies on treelist's stopPropagation)
 
     // No MutationObserver here on purpose: iconizer watches this same .folderlist with a remove+add repaint, and two observers ping-pong forever on the same subtree (tab HUNG). Rebuilds all come through AJAX (search/filter) which fires responseafter, or the initial parse.
     if (window.rcmail && rcmail.addEventListener) {

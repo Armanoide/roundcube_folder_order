@@ -7,7 +7,10 @@ namespace Armanoide\FolderOrder;
 /** Re-sort the render_mailboxlist tree by user order. Pure seam: no Roundcube, no prefs, no storage — the whole plugin's brain. */
 final class OrderSorter
 {
-    /** @param array<string,array> $tree hierarchical tree keyed by raw folder segment, each node carrying id + folders @param list<string> $order full folder ids in user order */
+    /**
+     * @param array<string,array> $tree hierarchical tree keyed by raw folder segment, each node carrying id + folders
+     * @param list<string> $order full folder ids in user order
+     */
     public static function sort(array $tree, array $order): array
     {
         if (empty($tree) || $order === []) {
@@ -58,7 +61,7 @@ final class OrderSorter
         $emit = static function (string $parent) use (&$emit, &$buckets, &$out, &$seen, $id_key): void {
             foreach ($buckets[$parent] ?? [] as $folder) {
                 $id = (string) ($folder[$id_key] ?? '');
-                // seen: a folder emits once, so no data shape can loop forever (the empty-id live 500 of 2026-11-14).
+                // seen: a folder emits once, so no data shape can loop forever (regression: empty ids from reading the wrong row key).
                 if ($id !== '' && isset($seen[$id])) {
                     continue;
                 }
@@ -71,17 +74,10 @@ final class OrderSorter
         };
         $emit('');
 
-        // A bucket whose parent never rendered keeps its rows at the end — never swallow a folder.
+        // Any row not emitted by the parent walk (deleted/hidden intermediate) is an orphan by construction: append it at the end, never swallow a folder.
         foreach ($buckets as $parent => $siblings) {
-            if ($parent !== '' && !self::is_ancestor_chain($parent, $list, $id_key)) {
-                foreach ($siblings as $folder) {
-                    $id = (string) ($folder[$id_key] ?? '');
-                    if ($id !== '' && isset($seen[$id])) {
-                        continue;
-                    }
-                    $seen[$id] = true;
-                    $out[] = $folder;
-                }
+            if ($parent !== '' && !isset($seen[$parent])) {
+                $emit($parent);
             }
         }
 
@@ -91,18 +87,6 @@ final class OrderSorter
     private static function parent_of(string $id, string $delim): string
     {
         return str_contains($id, $delim) ? substr($id, 0, strrpos($id, $delim)) : '';
-    }
-
-    /** @param list<array> $list */
-    private static function is_ancestor_chain(string $parent, array $list, string $id_key = 'id'): bool
-    {
-        foreach ($list as $folder) {
-            if ((string) ($folder[$id_key] ?? '') === $parent) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /** Ordered ids first by rank, unknown ones after them alphabetically — a new folder must never disappear. */

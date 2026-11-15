@@ -51,18 +51,14 @@ function ids(array $tree): array
 
 echo "OrderSorter\n";
 
-// Empty order: the core's alphabetical tree must stand untouched.
 check('empty order leaves tree unchanged', OrderSorter::sort(fixture(), []) === fixture());
 
-// Known ids float to the front in rank order; unknown ones follow alphabetically.
 $sorted = OrderSorter::sort(fixture(), ['Work', 'INBOX']);
 check('known ids ordered, unknown after alphabetically', ids($sorted) === ['Work', 'INBOX', 'Archive', 'Drafts']);
 
-// Recursion: a subfolder rank reorders inside its parent, independently of the top level.
 $sorted = OrderSorter::sort(fixture(), ['Archive/2026']);
 check('subfolders reorder under their parent', ids($sorted['Archive']['folders']) === ['Archive/2026', 'Archive/2025']);
 
-// A new folder never disappears: absent from order, it still renders (alphabetical among unknowns).
 $tree = fixture();
 $tree['New'] = ['id' => 'New', 'name' => 'New', 'virtual' => false, 'folders' => []];
 $sorted = OrderSorter::sort($tree, ['INBOX']);
@@ -72,7 +68,6 @@ check('unlisted folder survives', in_array('New', ids($sorted), true));
 $sorted = OrderSorter::sort(fixture(), ['Work']);
 check('associative keys preserved', array_keys($sorted) === ['Work', 'Archive', 'Drafts', 'INBOX']);
 
-// Unknown id in the order list is simply ignored, never fatal.
 check('unknown ordered id ignored', ids(OrderSorter::sort(fixture(), ['Ghost'])) === ['Archive', 'Drafts', 'INBOX', 'Work']);
 
 echo "OrderSorter::sort_flat\n";
@@ -96,25 +91,30 @@ function flat_ids(array $rows): array
 
 check('flat: empty order leaves list unchanged', flat_ids(OrderSorter::sort_flat(flat_fixture(), [])) === flat_ids(flat_fixture()));
 
-// Swap two top-level folders: children of the moved parent stay contiguous under it.
 $flat = OrderSorter::sort_flat(flat_fixture(), ['Bankings', 'INBOX'], '.');
 check('flat: ordered roots first by rank', array_slice(flat_ids($flat), 0, 2) === ['Bankings', 'INBOX']);
 check('flat: children stay under their parent', flat_ids($flat) === ['Bankings', 'INBOX', 'Administration', 'PRO.Clients', 'PRO.Insurance']);
 
-// Sibling reorder inside a parent.
 $flat = OrderSorter::sort_flat(flat_fixture(), ['PRO.Insurance'], '.');
 check('flat: siblings reorder under parent', array_slice(flat_ids($flat), -2) === ['PRO.Insurance', 'PRO.Clients']);
 
-// A special folder pinned at level 0 with a dotted id must bucket at top, not under INBOX.
 $special = [['id' => 'INBOX', 'level' => 0], ['id' => 'INBOX.Drafts', 'level' => 0]];
 $flat = OrderSorter::sort_flat($special, ['INBOX.Drafts'], '.');
 check('flat: level-0 special buckets at top despite dotted id', flat_ids($flat) === ['INBOX.Drafts', 'INBOX']);
 
-// Orphan bucket (parent absent from the list) never swallows rows.
 $flat = OrderSorter::sort_flat([['id' => 'Ghost.X', 'level' => 1]], ['Ghost.X'], '.');
 check('flat: orphan rows survive', flat_ids($flat) === ['Ghost.X']);
 
-// Regression: the core folders_list hook keys rows by 'folder_imap', not 'id'. Reading the wrong key yields empty ids and infinite recursion (live 500, 2026-11-14).
+// Regression: an orphan deeper than one level (parent absent, grandchild present) must not be swallowed.
+$deep = [['id' => 'A.B', 'level' => 1], ['id' => 'A.B.C', 'level' => 2]];
+$flat = OrderSorter::sort_flat($deep, ['INBOX'], '.');
+check('flat: orphan depth-2 subtree survives', flat_ids($flat) === ['A.B', 'A.B.C']);
+
+$slash = [['id' => 'Notes', 'level' => 0], ['id' => 'Notes/Ideas', 'level' => 1], ['id' => 'Work', 'level' => 0]];
+$flat = OrderSorter::sort_flat($slash, ['Notes/Ideas'], '/');
+check('flat: slash delimiter nests', flat_ids($flat) === ['Notes', 'Notes/Ideas', 'Work']);
+
+// Regression: the core folders_list hook keys rows by 'folder_imap', not 'id'. Reading the wrong key yields empty ids and infinite recursion.
 function core_flat_fixture(): array
 {
     return [
@@ -128,7 +128,7 @@ function core_flat_fixture(): array
 $flat = OrderSorter::sort_flat(core_flat_fixture(), ['Bankings', 'INBOX'], '.', 'folder_imap');
 check('flat: core folder_imap shape sorts, no recursion blowup', array_column($flat, 'folder_imap') === ['Bankings', 'INBOX', 'Administration', 'PRO.Clients']);
 
-// The live 500 case: folders_list rows have no 'id' key. Old code recursed emit('') forever; seen-tracking must terminate and keep every row once.
+// Regression: rows without an 'id' key — seen-tracking must terminate and keep every row once.
 $nokey = [
     ['folder_imap' => 'INBOX', 'level' => 0],
     ['folder_imap' => 'Drafts', 'level' => 0],
@@ -153,15 +153,13 @@ check('hydrate junk => empty', $s->isEmpty());
 
 echo "OrderStore::sanitize_json\n";
 
-// Autosave payload: clean pre-order list passes through untouched.
 check('sanitize keeps valid list', OrderStore::sanitize_json('["INBOX","PRO.Clients"]') === ['INBOX', 'PRO.Clients']);
 
-// Broken JSON must return null so the handler keeps the previous order — never a wipe.
+// null on broken input so the caller keeps the previous order — never a wipe.
 check('sanitize broken json => null', OrderStore::sanitize_json('{"not":"a list"}') === null);
 check('sanitize empty string => null', OrderStore::sanitize_json('') === null);
 check('sanitize empty list => null', OrderStore::sanitize_json('[]') === null);
 
-// Junk entries dropped, empty strings dropped, reindexed.
 check('sanitize drops junk', OrderStore::sanitize_json('["INBOX",42,"","Work"]') === ['INBOX', 'Work']);
 
 echo "\n{$pass} passed, {$fail} failed\n";

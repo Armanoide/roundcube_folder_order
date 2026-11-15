@@ -30,7 +30,12 @@ class roundcube_folder_order extends rcube_plugin
             // Inline, not include_script (iconizer lesson): registered scripts vanished from re-rendered pages. The JS self-guards on body.action-folders.
             $out = rcmail::get_instance()->output;
             if ($out && $out->type === 'html' && method_exists($out, 'add_script')) {
-                $out->add_script((string) @file_get_contents(__DIR__ . '/folderorder.js'));
+                $js = file_get_contents(__DIR__ . '/folderorder.js');
+                if ($js === false) {
+                    error_log('roundcube_folder_order: folderorder.js unreadable — arrows will not render');
+                } else {
+                    $out->add_script($js);
+                }
             }
         }
     }
@@ -72,7 +77,7 @@ class roundcube_folder_order extends rcube_plugin
     {
         $rcmail = rcmail::get_instance();
 
-        // CSRF: core already ran request_security_check() before exec_action (rcmail.php:224) — no manual token check here, and there is no check_request_token() in this API.
+        // CSRF handled by core: request_security_check() runs before exec_action — no token check here.
 
         $order = OrderStore::sanitize_json(rcube_utils::get_input_string('_order', rcube_utils::INPUT_POST));
 
@@ -82,7 +87,9 @@ class roundcube_folder_order extends rcube_plugin
             return;
         }
 
-        $rcmail->user->save_prefs([OrderStore::PREFS_KEY => $order]);
+        if (!$rcmail->user->save_prefs([OrderStore::PREFS_KEY => $order])) {
+            $rcmail->output->command('textmessage', ['message' => 'Saving failed — the order was not stored.', 'target' => 'messagestack']);
+        }
         $rcmail->output->send();
     }
 
