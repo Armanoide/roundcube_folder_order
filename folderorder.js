@@ -5,7 +5,7 @@
     var LIST = '#subscription-table';
     var busy = false;
 
-    function inject_style() {
+    function injectStyle() {
         if (document.getElementById('rcfo-style')) return;
         var s = document.createElement('style');
         s.id = 'rcfo-style';
@@ -13,20 +13,25 @@
         s.textContent = '#subscription-table li.mailbox{position:relative}'
             + '#subscription-table li.mailbox > .custom-switch{right:3.4rem}'
             + '#subscription-table li.mailbox > .rcfo-arrows{position:absolute;top:0;right:.25rem;display:flex;align-items:center;height:100%;gap:.15rem}'
-            + '#subscription-table .rcfo-arrows button{border:0;background:transparent;color:inherit;cursor:pointer;font-size:.9rem;line-height:1;padding:.35rem .3rem}'
+            + '#subscription-table .rcfo-arrows button{border:0;background:transparent;color:inherit;cursor:pointer;font-size:.9rem;line-height:1;padding:.35rem .3rem;min-width:1.5rem;min-height:1.5rem}'
             + '#subscription-table .rcfo-arrows button[disabled]{opacity:.25;cursor:default}';
         document.head.appendChild(s);
     }
 
     // offsetParent null = row hidden by the search filter: swapping with an invisible neighbor would change prefs with zero feedback.
     function orderable(li) {
-        return li && li.classList.contains('mailbox') && !li.classList.contains('root')
-            && li.offsetParent !== null
-            && !!li.querySelector(':scope > .custom-switch input');
+        if (!li || !li.classList.contains('mailbox') || li.classList.contains('root')) return false;
+        // treelist search clones (clone(true,true)) mirror a real row incl. its checkbox: collectOrder would POST that folder twice and corrupt the order.
+        if (li.classList.contains('searchresult__')) return false;
+        if (li.offsetParent === null) return false;
+        // disabled checkbox = read-only folder (Other Users namespaces): nothing there for the user to order.
+        var cb = li.querySelector(':scope > .custom-switch input');
+        return !!cb && !cb.disabled;
     }
 
     function neighbor(li, dir) {
         var ref = dir < 0 ? li.previousElementSibling : li.nextElementSibling;
+        // shortcut: silent block under active search filter; needs repaint hooks to fix properly.
         return orderable(ref) ? ref : null;
     }
 
@@ -51,29 +56,33 @@
             e.preventDefault();
             e.stopPropagation();
             var b = e.target.closest('button');
-            if (b && !b.disabled) move_row_and_save(b);
+            if (b && !b.disabled) moveRowAndSave(b);
         });
+        // keep press-drag off the row's IMAP move handler — the core draggable cancel list has no .rcfo-arrows
+        span.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+        span.addEventListener('touchstart', function (e) { e.stopPropagation(); });
         li.appendChild(span);
     }
 
     function paintAll() {
         if (!document.body.classList.contains('action-folders')) return;
-        inject_style();
+        injectStyle();
         document.querySelectorAll(LIST + ' li.mailbox').forEach(function (li) {
             if (orderable(li)) paint(li);
         });
     }
 
     // Document order of the rows = pre-order; checkbox value carries the raw IMAP name (iconizer rule: never decode ids).
+    // :not(.searchresult__) — search clones mirror real rows; a second guard so a stray clone never enters the saved order.
     function collectOrder() {
         var ids = [];
-        document.querySelectorAll(LIST + ' li.mailbox > .custom-switch input').forEach(function (cb) {
+        document.querySelectorAll(LIST + ' li.mailbox:not(.searchresult__) > .custom-switch input').forEach(function (cb) {
             if (cb.value) ids.push(cb.value);
         });
         return ids;
     }
 
-    function move_row_and_save(btn) {
+    function moveRowAndSave(btn) {
         if (busy) return;
         var li = btn.closest('li.mailbox');
         var dir = btn.classList.contains('rcfo-up') ? -1 : 1;
@@ -87,8 +96,8 @@
         // Core forces a 'plugin.' prefix on every plugin-registered action (rcube_plugin_api::register_action) — posting to the bare name silently 404s into an empty envelope.
         $.post(rcmail.url('plugin.folderorder-save'), { _order: JSON.stringify(collectOrder()), _token: rcmail.env.request_token })
             .always(function () { busy = false; paintAll(); })
-            // Plain $.post never executes core commands: a textmessage in the envelope means reject or save-failure, so reload to server truth.
-            .done(function (r) { if (r && String(r).indexOf('textmessage') > -1) location.reload(); })
+            // Plain $.post never executes core commands; jQuery already parsed the JSON envelope, so the commands live in r.exec.
+            .done(function (r) { if (r && r.exec && r.exec.indexOf('textmessage') > -1) location.reload(); })
             .fail(function () { location.reload(); }); // server truth wins over a desynced DOM
     }
 

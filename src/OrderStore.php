@@ -25,9 +25,9 @@ final class OrderStore
     }
 
     /** Decode an autosave POST payload; null on broken JSON so the caller keeps the previous order, never wipes. */
-    public static function sanitize_json(?string $raw): ?array
+    public static function sanitize_json(string $raw): ?array
     {
-        if ($raw === null || $raw === '') {
+        if ($raw === '') {
             return null;
         }
 
@@ -38,7 +38,8 @@ final class OrderStore
 
         $clean = array_values(array_filter($decoded, static fn($v): bool => is_string($v) && $v !== ''));
 
-        return $clean === [] ? null : $clean;
+        // dedup server-side too: a search-clone POST (or an old client) can carry the same folder twice, duplicate ranks corrupt the sort
+        return $clean === [] ? null : array_values(array_unique($clean));
     }
 
     /** @return list<string> */

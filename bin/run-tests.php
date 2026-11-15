@@ -89,29 +89,28 @@ function flat_ids(array $rows): array
     return array_column($rows, 'id');
 }
 
-check('flat: empty order leaves list unchanged', flat_ids(OrderSorter::sort_flat(flat_fixture(), [])) === flat_ids(flat_fixture()));
+check('flat: empty order leaves list unchanged', flat_ids(OrderSorter::sort_flat(flat_fixture(), [], '/', 'id')) === flat_ids(flat_fixture()));
 
-$flat = OrderSorter::sort_flat(flat_fixture(), ['Bankings', 'INBOX'], '.');
-check('flat: ordered roots first by rank', array_slice(flat_ids($flat), 0, 2) === ['Bankings', 'INBOX']);
+$flat = OrderSorter::sort_flat(flat_fixture(), ['Bankings', 'INBOX'], '.', 'id');
 check('flat: children stay under their parent', flat_ids($flat) === ['Bankings', 'INBOX', 'Administration', 'PRO.Clients', 'PRO.Insurance']);
 
-$flat = OrderSorter::sort_flat(flat_fixture(), ['PRO.Insurance'], '.');
+$flat = OrderSorter::sort_flat(flat_fixture(), ['PRO.Insurance'], '.', 'id');
 check('flat: siblings reorder under parent', array_slice(flat_ids($flat), -2) === ['PRO.Insurance', 'PRO.Clients']);
 
 $special = [['id' => 'INBOX', 'level' => 0], ['id' => 'INBOX.Drafts', 'level' => 0]];
-$flat = OrderSorter::sort_flat($special, ['INBOX.Drafts'], '.');
+$flat = OrderSorter::sort_flat($special, ['INBOX.Drafts'], '.', 'id');
 check('flat: level-0 special buckets at top despite dotted id', flat_ids($flat) === ['INBOX.Drafts', 'INBOX']);
 
-$flat = OrderSorter::sort_flat([['id' => 'Ghost.X', 'level' => 1]], ['Ghost.X'], '.');
+$flat = OrderSorter::sort_flat([['id' => 'Ghost.X', 'level' => 1]], ['Ghost.X'], '.', 'id');
 check('flat: orphan rows survive', flat_ids($flat) === ['Ghost.X']);
 
 // Regression: an orphan deeper than one level (parent absent, grandchild present) must not be swallowed.
 $deep = [['id' => 'A.B', 'level' => 1], ['id' => 'A.B.C', 'level' => 2]];
-$flat = OrderSorter::sort_flat($deep, ['INBOX'], '.');
+$flat = OrderSorter::sort_flat($deep, ['INBOX'], '.', 'id');
 check('flat: orphan depth-2 subtree survives', flat_ids($flat) === ['A.B', 'A.B.C']);
 
 $slash = [['id' => 'Notes', 'level' => 0], ['id' => 'Notes/Ideas', 'level' => 1], ['id' => 'Work', 'level' => 0]];
-$flat = OrderSorter::sort_flat($slash, ['Notes/Ideas'], '/');
+$flat = OrderSorter::sort_flat($slash, ['Notes/Ideas'], '/', 'id');
 check('flat: slash delimiter nests', flat_ids($flat) === ['Notes', 'Notes/Ideas', 'Work']);
 
 // Regression: the core folders_list hook keys rows by 'folder_imap', not 'id'. Reading the wrong key yields empty ids and infinite recursion.
@@ -175,6 +174,9 @@ check('sanitize empty string => null', OrderStore::sanitize_json('') === null);
 check('sanitize empty list => null', OrderStore::sanitize_json('[]') === null);
 
 check('sanitize drops junk', OrderStore::sanitize_json('["INBOX",42,"","Work"]') === ['INBOX', 'Work']);
+
+// search clones can POST the same folder twice — duplicate ranks must not reach prefs
+check('sanitize dedups', OrderStore::sanitize_json('["INBOX","Work","INBOX","Work"]') === ['INBOX', 'Work']);
 
 echo "\n{$pass} passed, {$fail} failed\n";
 exit($fail === 0 ? 0 : 1);

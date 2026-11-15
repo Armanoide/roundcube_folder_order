@@ -32,8 +32,8 @@ final class OrderSorter
         return $tree;
     }
 
-    /** Flat pre-order list (folders_list hook of the settings page): siblings bucketed by parent, DFS emit keeps children contiguous under their parent. Rows key the id under 'folder_imap' there, 'id' in my own settings list. */
-    public static function sort_flat(array $list, array $order, string $delim = '/', string $id_key = 'id'): array
+    /** Flat pre-order list (folders_list hook of the settings page): siblings bucketed by parent, DFS emit keeps children contiguous under their parent. Rows key the id under $id_key — the core hook uses 'folder_imap'. */
+    public static function sort_flat(array $list, array $order, string $delim, string $id_key): array
     {
         if (empty($list) || $order === []) {
             return $list;

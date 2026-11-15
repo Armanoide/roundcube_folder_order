@@ -24,6 +24,8 @@ class roundcube_folder_order extends rcube_plugin
         $this->add_hook('folders_list', [$this, 'sort_flat_list']);
         // Renames keep their position, deletes stop littering prefs (renames can fire from the mail sidebar too).
         $this->add_hook('folder_rename', [$this, 'on_folder_rename']);
+        // The edit-folder form renames through folder_update, never folder_rename — same migration, record shape.
+        $this->add_hook('folder_update', [$this, 'on_folder_update']);
         $this->add_hook('folder_delete', [$this, 'on_folder_delete']);
 
         if (rcmail::get_instance()->task === 'settings') {
@@ -32,7 +34,7 @@ class roundcube_folder_order extends rcube_plugin
 
             // Inline, not include_script (iconizer lesson): registered scripts vanished from re-rendered pages. The JS self-guards on body.action-folders.
             $out = rcmail::get_instance()->output;
-            if ($out && $out->type === 'html' && method_exists($out, 'add_script')) {
+            if ($out && $out->type === 'html') {
                 $js = file_get_contents(__DIR__ . '/folderorder.js');
                 if ($js === false) {
                     error_log('roundcube_folder_order: folderorder.js unreadable — arrows will not render');
@@ -75,7 +77,8 @@ class roundcube_folder_order extends rcube_plugin
         return $args;
     }
 
-    /** Migrate the stored position of a renamed folder (and its subfolders) to the new name. */
+    /** Migrate the stored position of a renamed folder (and its subfolders) to the new name.
+     *  Core fires this hook BEFORE the storage rename runs: if the server fails, the prefs entry is orphaned and the folder falls back to alphabetical — cosmetic, self-corrects on next save. */
     public function on_folder_rename($args)
     {
         $this->bind_store();
@@ -88,6 +91,19 @@ class roundcube_folder_order extends rcube_plugin
             $this->store->rename($old, $new, rcmail::get_instance()->get_storage()->get_hierarchy_delimiter());
             $this->persistIfChanged($before);
         }
+
+        return $args;
+    }
+
+    /** Edit-folder form path (folder_save): core fires folder_update with the new name under record['name'], old under record['oldname']. */
+    public function on_folder_update($args)
+    {
+        $record = (array) ($args['record'] ?? []);
+        // Return $args untouched: folder_save reads back $plugin['record']; we only piggyback the migration.
+        $this->on_folder_rename([
+            'oldname' => (string) ($record['oldname'] ?? ''),
+            'newname' => (string) ($record['name'] ?? ''),
+        ]);
 
         return $args;
     }
