@@ -72,10 +72,7 @@ class roundcube_folder_order extends rcube_plugin
     {
         $rcmail = rcmail::get_instance();
 
-        if (!$rcmail->check_request_token(rcube_utils::INPUT_POST)) {
-            raise_error(['code' => 403, 'message' => 'invalidrequesttoken']);
-            return;
-        }
+        // CSRF: core already ran request_security_check() before exec_action (rcmail.php:224) — no manual token check here, and there is no check_request_token() in this API.
 
         $order = OrderStore::sanitize_json(rcube_utils::get_input_string('_order', rcube_utils::INPUT_POST));
 

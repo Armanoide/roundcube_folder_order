@@ -87,7 +87,8 @@
         paintAll();
 
         setBusy(true);
-        $.post(rcmail.url('folderorder-save'), { _order: JSON.stringify(collectOrder()), _token: rcmail.env.request_token })
+        // Core forces a 'plugin.' prefix on every plugin-registered action (rcube_plugin_api::register_action) — posting to the bare name silently 404s into an empty envelope.
+        $.post(rcmail.url('plugin.folderorder-save'), { _order: JSON.stringify(collectOrder()), _token: rcmail.env.request_token })
             .always(function () { setBusy(false); })
             .fail(function () { location.reload(); }); // server truth wins over a desynced DOM
     }
