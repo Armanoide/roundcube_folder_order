@@ -34,11 +34,15 @@
     }
 
     function paint(li) {
-        var old = li.querySelector(':scope > .rcfo-arrows');
-        if (old) old.remove();
-
         var up = neighbor(li, -1);
         var down = neighbor(li, 1);
+        var old = li.querySelector(':scope > .rcfo-arrows');
+        // Idempotent: never touch the DOM when state already matches — iconizer's observer watches this same tree and its repaint is remove+add, so any spurious mutation here pings back (RESULT_CODE_HUNG lesson).
+        if (old) {
+            var bu = old.querySelector('.rcfo-up'), bd = old.querySelector('.rcfo-down');
+            if (bu && bd && bu.disabled === !up && bd.disabled === !down && !busy) return;
+            old.remove();
+        }
 
         var span = document.createElement('span');
         span.className = 'rcfo-arrows';
@@ -86,26 +90,14 @@
         if (btn && !btn.disabled) onArrow(btn);
     });
 
-    // Search/filter rebuilds rows; the observer disconnects while we mutate so our edits never retrigger it (iconizer pattern). Deferred to ready: add_script lands in head, where #subscription-table does not exist yet at parse time.
-    function armObserver() {
-        var list = document.querySelector(LIST);
-        if (!list || !window.MutationObserver) return;
-        var mo = new MutationObserver(function () {
-            mo.disconnect();
-            paintAll();
-            mo.observe(list, { childList: true, subtree: true });
-        });
-        mo.observe(list, { childList: true, subtree: true });
-    }
-
+    // No MutationObserver here on purpose: iconizer watches this same .folderlist with a remove+add repaint, and two observers ping-pong forever on the same subtree (tab HUNG). Rebuilds all come through AJAX (search/filter) which fires responseafter, or the initial parse.
     if (window.rcmail && rcmail.addEventListener) {
         rcmail.addEventListener('responseafter', paintAll);
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function () { paintAll(); armObserver(); });
+        document.addEventListener('DOMContentLoaded', paintAll);
     } else {
         paintAll();
-        armObserver();
     }
 })();
