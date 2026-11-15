@@ -24,9 +24,8 @@
         // treelist search clones (clone(true,true)) mirror a real row incl. its checkbox: collectOrder would POST that folder twice and corrupt the order.
         if (li.classList.contains('searchresult__')) return false;
         if (li.offsetParent === null) return false;
-        // disabled checkbox = read-only folder (Other Users namespaces): nothing there for the user to order.
-        var cb = li.querySelector(':scope > .custom-switch input');
-        return !!cb && !cb.disabled;
+        // special folders carry a DISABLED checkbox (core locks unsubscribe, folders.php:156) — reorder stays legal.
+        return !!li.querySelector(':scope > .custom-switch input');
     }
 
     function neighbor(li, dir) {

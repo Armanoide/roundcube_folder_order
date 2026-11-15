@@ -53,6 +53,8 @@ None. Install, enable, reorder.
 
 **Reorder folders** — Settings → *Folders* → click the ↑/↓ arrows on any row. The order saves immediately — no form, no Save button. Folders missing from your saved order (new ones) appear after the ordered ones, alphabetically — nothing ever disappears.
 
+![Reorder arrows in Settings → Folders](assets/preview/preview_01.png)
+
 ## How it works
 
 - `render_mailboxlist` hook — re-sorts the sidebar tree by the saved order
