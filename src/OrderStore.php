@@ -47,6 +47,27 @@ final class OrderStore
         return $this->order;
     }
 
+    /** Rewrite a renamed folder and its whole subtree in place — positions travel with it. */
+    public function rename(string $oldFolder, string $newFolder, string $delimiter = '/'): void
+    {
+        $prefix = $oldFolder . $delimiter;
+        foreach ($this->order as $i => $folder) {
+            if ($folder === $oldFolder || str_starts_with($folder, $prefix)) {
+                $this->order[$i] = $newFolder . substr($folder, strlen($oldFolder));
+            }
+        }
+    }
+
+    /** Drop a deleted folder and its whole subtree from the list. */
+    public function forgetTree(string $folder, string $delimiter = '/'): void
+    {
+        $prefix = $folder . $delimiter;
+        $this->order = array_values(array_filter(
+            $this->order,
+            static fn(string $f): bool => $f !== $folder && !str_starts_with($f, $prefix)
+        ));
+    }
+
     public function isEmpty(): bool
     {
         return $this->order === [];

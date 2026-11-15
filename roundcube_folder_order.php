@@ -22,6 +22,9 @@ class roundcube_folder_order extends rcube_plugin
         $this->add_hook('render_mailboxlist', [$this, 'sort_tree']);
         // The settings folders page builds its own flat list — same order, flat variant.
         $this->add_hook('folders_list', [$this, 'sort_flat_list']);
+        // Renames keep their position, deletes stop littering prefs (renames can fire from the mail sidebar too).
+        $this->add_hook('folder_rename', [$this, 'on_folder_rename']);
+        $this->add_hook('folder_delete', [$this, 'on_folder_delete']);
 
         if (rcmail::get_instance()->task === 'settings') {
             // Autosave endpoint for the ↑/↓ arrows injected into the folders page (folderorder.js).
@@ -70,6 +73,46 @@ class roundcube_folder_order extends rcube_plugin
         }
 
         return $args;
+    }
+
+    /** Migrate the stored position of a renamed folder (and its subfolders) to the new name. */
+    public function on_folder_rename($args)
+    {
+        $this->bind_store();
+
+        $old = (string) ($args['oldname'] ?? '');
+        $new = (string) ($args['newname'] ?? '');
+
+        if ($old !== '' && $new !== '' && $old !== $new) {
+            $before = $this->store->all();
+            $this->store->rename($old, $new, rcmail::get_instance()->get_storage()->get_hierarchy_delimiter());
+            $this->persistIfChanged($before);
+        }
+
+        return $args;
+    }
+
+    /** Forget the stored position of a deleted folder (and its subfolders). */
+    public function on_folder_delete($args)
+    {
+        $this->bind_store();
+
+        $name = (string) ($args['name'] ?? '');
+        if ($name !== '') {
+            $before = $this->store->all();
+            $this->store->forgetTree($name, rcmail::get_instance()->get_storage()->get_hierarchy_delimiter());
+            $this->persistIfChanged($before);
+        }
+
+        return $args;
+    }
+
+    /** Save prefs only when a rename/delete actually touched the order — no needless writes. */
+    private function persistIfChanged(array $before): void
+    {
+        if ($this->store->all() !== $before) {
+            rcmail::get_instance()->user->save_prefs([OrderStore::PREFS_KEY => $this->store->all()]);
+        }
     }
 
     /** Persist the posted pre-order list. Broken payload keeps the previous order — a tampered or truncated POST must never wipe the user's layout. */

@@ -151,6 +151,21 @@ check('hydrate drops non-strings', $s->all() === ['INBOX', 'Work']);
 $s->hydrate('not-an-array');
 check('hydrate junk => empty', $s->isEmpty());
 
+$s = new OrderStore();
+$s->hydrate(['INBOX', 'Work', 'Work/2025', 'Other']);
+$s->rename('Work', 'Archive', '/');
+check('rename rewrites folder and subtree in place', $s->all() === ['INBOX', 'Archive', 'Archive/2025', 'Other']);
+
+$s = new OrderStore();
+$s->hydrate(['INBOX', 'Work', 'Work/2025', 'WORKX', 'Other']);
+$s->forgetTree('Work', '/');
+check('forgetTree drops subtree only', $s->all() === ['INBOX', 'WORKX', 'Other']);
+
+$s = new OrderStore();
+$s->hydrate(['INBOX', 'Work']);
+$s->rename('Ghost', 'Archive', '/');
+check('rename unknown folder is a no-op', $s->all() === ['INBOX', 'Work']);
+
 echo "OrderStore::sanitize_json\n";
 
 check('sanitize keeps valid list', OrderStore::sanitize_json('["INBOX","PRO.Clients"]') === ['INBOX', 'PRO.Clients']);
