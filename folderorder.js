@@ -49,6 +49,13 @@
         span.innerHTML = '<button type="button" class="rcfo-up"' + (up ? '' : ' disabled') + ' aria-label="Move up">↑</button>'
             + '<button type="button" class="rcfo-down"' + (down ? '' : ' disabled') + ' aria-label="Move down">↓</button>';
         if (busy) span.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+        // Bind on the span, not document: core treelist binds click on li and calls stopPropagation, so delegated listeners never fire (and we must not select the row when clicking an arrow).
+        span.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var b = e.target.closest('button');
+            if (b && !b.disabled) onArrow(b);
+        });
         li.appendChild(span);
     }
 
@@ -85,10 +92,7 @@
             .fail(function () { location.reload(); }); // server truth wins over a desynced DOM
     }
 
-    document.addEventListener('click', function (e) {
-        var btn = e.target.closest ? e.target.closest('.rcfo-up, .rcfo-down') : null;
-        if (btn && !btn.disabled) onArrow(btn);
-    });
+    // (click handling is bound per-arrow-span in paint() — document delegation dies on treelist's stopPropagation)
 
     // No MutationObserver here on purpose: iconizer watches this same .folderlist with a remove+add repaint, and two observers ping-pong forever on the same subtree (tab HUNG). Rebuilds all come through AJAX (search/filter) which fires responseafter, or the initial parse.
     if (window.rcmail && rcmail.addEventListener) {
