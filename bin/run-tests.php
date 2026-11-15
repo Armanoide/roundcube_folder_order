@@ -64,7 +64,7 @@ $tree['New'] = ['id' => 'New', 'name' => 'New', 'virtual' => false, 'folders' =>
 $sorted = OrderSorter::sort($tree, ['INBOX']);
 check('unlisted folder survives', in_array('New', ids($sorted), true));
 
-// Keys preserved: the associative segment key must survive uasort (rendering and rename depend on it).
+// regression: rendering and rename depend on the associative segment key surviving uasort.
 $sorted = OrderSorter::sort(fixture(), ['Work']);
 check('associative keys preserved', array_keys($sorted) === ['Work', 'Archive', 'Drafts', 'INBOX']);
 
@@ -170,7 +170,6 @@ echo "OrderStore::sanitize_json\n";
 
 check('sanitize keeps valid list', OrderStore::sanitize_json('["INBOX","PRO.Clients"]') === ['INBOX', 'PRO.Clients']);
 
-// null on broken input so the caller keeps the previous order — never a wipe.
 check('sanitize broken json => null', OrderStore::sanitize_json('{"not":"a list"}') === null);
 check('sanitize empty string => null', OrderStore::sanitize_json('') === null);
 check('sanitize empty list => null', OrderStore::sanitize_json('[]') === null);

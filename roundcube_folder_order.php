@@ -68,7 +68,7 @@ class roundcube_folder_order extends rcube_plugin
 
         $rcmail = rcmail::get_instance();
         if (isset($args['list']) && is_array($args['list'])) {
-            // Core rows key the raw name under 'folder_imap' — reading 'id' here caused the live 500 (empty ids, infinite recursion).
+            // regression: core folders_list keys rows by 'folder_imap' — reading 'id' yields empty ids and infinite recursion.
             $args['list'] = OrderSorter::sort_flat($args['list'], $this->store->all(), $rcmail->get_storage()->get_hierarchy_delimiter(), 'folder_imap');
         }
 
@@ -120,7 +120,7 @@ class roundcube_folder_order extends rcube_plugin
     {
         $rcmail = rcmail::get_instance();
 
-        // CSRF handled by core: request_security_check() runs before exec_action — no token check here.
+        // CSRF handled by core: request_security_check() runs before exec_action.
 
         $order = OrderStore::sanitize_json(rcube_utils::get_input_string('_order', rcube_utils::INPUT_POST));
 
