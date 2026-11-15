@@ -3,21 +3,19 @@
 Manual folder ordering in the Roundcube Elastic sidebar — drag-free ↑/↓ arrows in Settings → Folders, sorted server-side, stored per user.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/Armanoide/roundcube_folder_order?style=flat-square&logo=github)](https://github.com/Armanoide/roundcube_folder_order/stargazers)
-[![Issues](https://img.shields.io/github/issues/Armanoide/roundcube_folder_order?style=flat-square)](https://github.com/Armanoide/roundcube_folder_order/issues)
 
 ## Features
 
-- ↑ **Reorder arrows** in Settings → *Folders* — one click moves a row (its subtree travels with it), autosaved instantly
-- 🖥️ **Server-side sort** — the sidebar HTML arrives already ordered; no client repaint, no flicker
-- 👤 **Per-user persistence** — the order lives in your Roundcube user preferences, synced across devices
-- ♻️ **Follows your folders** — renames keep the position, deletes clean up prefs (subtree included)
-- 🛡️ **Tamper-safe** — a broken or truncated POST keeps your previous order; it never wipes the layout
+- **Reorder arrows** in Settings → *Folders* — one click moves a row (its subtree travels with it), autosaved instantly
+- **Server-side sort** — the sidebar HTML arrives already ordered; no client repaint, no flicker
+- **Per-user persistence** — the order lives in your Roundcube user preferences, synced across devices
+- **Follows your folders** — renames keep the position (inline and edit-form), deletes clean up prefs (subtree included)
+- **Never wipes** — a broken or truncated POST keeps your previous order
 
 ## Requirements
 
 - Roundcube **1.6+** with the **Elastic** skin
-- PHP **8.0+**
+- PHP **8.1+**
 
 ## Installation
 
@@ -56,6 +54,7 @@ None. Install, enable, reorder.
 ## Known limitations
 
 - The arrow layout is pixel-tuned for the **Elastic** skin; other skins show the reorder functionality without the styling.
+- Your custom order also applies to folder dropdowns (move/copy dialogs, filter editor) — they share the sidebar sort. Consistency was chosen over alphabetical there.
 
 ## License
 
