@@ -35,6 +35,16 @@ $config['plugins'] = [
 ];
 ```
 
+### Docker
+
+```yaml
+services:
+  roundcubemail:
+    image: roundcube/roundcubemail:latest
+    volumes:
+      - ./plugins/roundcube_folder_order:/var/www/html/plugins/roundcube_folder_order
+```
+
 ## Configuration
 
 None. Install, enable, reorder.
